@@ -10,7 +10,7 @@
 # First time only:  chmod +x 03_requests.sh
 
 # ---- Fill these in before class (Project Settings -> Data API / API Keys) ----
-SUPABASE_URL="https://qzubtozzhoyjfbzbkvxe.supabase.co/rest/v1/"
+SUPABASE_URL="https://qzubtozzhoyjfbzbkvxe.supabase.co"
 PUBLISHABLE_KEY="sb_publishable_BJ3dtjCwY5DnLClmA0T0jQ_QjIJpV7e"
 # ------------------------------------------------------------------------------
 
