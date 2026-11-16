@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DreamHome Rentals</title>
+  <style>
+    :root {
+      --ink: #1f2933;
+      --muted: #616e7c;
+      --line: #d9e2ec;
+      --bg: #f5f7fa;
+      --accent: #2b6cb0;
+      --bad: #c53030;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 18px;
+      line-height: 1.5;
+      color: var(--ink);
+      background: var(--bg);
+    }
+    header {
+      background: var(--accent);
+      color: white;
+      padding: 20px 24px;
+    }
+    header h1 { margin: 0; font-size: 28px; }
+    header p { margin: 4px 0 0; opacity: 0.85; }
+    main { max-width: 900px; margin: 0 auto; padding: 24px 16px 48px; }
+    section {
+      background: white;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 24px;
+    }
+    h2 { margin-top: 0; font-size: 22px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+    th { color: var(--muted); font-weight: 600; font-size: 15px; text-transform: uppercase; letter-spacing: 0.03em; }
+    td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    th.num { text-align: right; }
+    form { display: flex; flex-wrap: wrap; gap: 10px; }
+    input {
+      flex: 1 1 220px;
+      font-size: 18px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+    }
+    button {
+      font-size: 18px;
+      padding: 10px 18px;
+      border: none;
+      border-radius: 6px;
+      background: var(--accent);
+      color: white;
+      cursor: pointer;
+    }
+    button.secondary { background: white; color: var(--accent); border: 1px solid var(--accent); }
+    .muted { color: var(--muted); }
+    .error { color: var(--bad); }
+    .banner {
+      background: #fffbea;
+      border: 1px solid #f0b429;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 24px;
+    }
+    .hidden { display: none; }
+    .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>DreamHome Rentals</h1>
+    <p>A live demo: this page reads straight from a Supabase (PostgreSQL) database.</p>
+  </header>
+
+  <main>
+    <div id="config-warning" class="banner hidden">
+      <strong>Setup needed:</strong> put your Supabase project URL and publishable key
+      near the bottom of <code>index.html</code>.
+    </div>
+
+    <!-- 1. Public listings: anyone can see these -->
+    <section>
+      <h2>Properties for rent</h2>
+      <p class="muted">Visible to everyone. No login needed.</p>
+      <div id="listings">Loading…</div>
+    </section>
+
+    <!-- 2. Log in -->
+    <section id="login-section">
+      <h2>Client login</h2>
+      <form id="login-form">
+        <input id="email" type="email" placeholder="Email" autocomplete="username" required>
+        <input id="password" type="password" placeholder="Password" autocomplete="current-password" required>
+        <button type="submit">Log in</button>
+      </form>
+      <p id="login-message" class="error"></p>
+    </section>
+
+    <!-- 3. Private: only the logged-in client's own data -->
+    <section id="private-section" class="hidden">
+      <div class="row">
+        <h2 id="welcome">My account</h2>
+        <button id="logout" class="secondary">Log out</button>
+      </div>
+      <p class="muted">The database only returns rows that belong to you.</p>
+      <h3>My viewings</h3>
+      <div id="viewings">Loading…</div>
+    </section>
+  </main>
+
+  <script type="module">
+    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+
+    // ---- Fill these in (Project Settings -> Data API / API Keys) ----------
+    // The publishable key is MEANT to be public. It is safe here ONLY because
+    // the database has Row Level Security rules. NEVER put the secret key here.
+    const SUPABASE_URL = 'https://qzubtozzhoyjfbzbkvxe.supabase.co/rest/v1/';
+    const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_BJ3dtjCwY5DnLClmA0T0jQ_QjIJpV7e';
+    // -----------------------------------------------------------------------
+
+    if (SUPABASE_URL.includes('YOUR-PROJECT') || SUPABASE_PUBLISHABLE_KEY.includes('YOUR_KEY')) {
+      document.getElementById('config-warning').classList.remove('hidden');
+    }
+
+    // Connect: the same two things curl needed, an address and a key
+    const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+
+    // Small helper: build a table from rows, using textContent (never innerHTML)
+    // so data from the database can't inject code into the page.
+    function renderTable(container, rows, columns) {
+      container.textContent = '';
+      if (rows.length === 0) {
+        const p = document.createElement('p');
+        p.className = 'muted';
+        p.textContent = 'No rows returned.';
+        container.appendChild(p);
+        return;
+      }
+      const table = document.createElement('table');
+      const headRow = table.createTHead().insertRow();
+      for (const col of columns) {
+        const th = document.createElement('th');
+        th.textContent = col.label;
+        if (col.numeric) th.className = 'num';
+        headRow.appendChild(th);
+      }
+      const body = table.createTBody();
+      for (const row of rows) {
+        const tr = body.insertRow();
+        for (const col of columns) {
+          const td = tr.insertCell();
+          const value = col.value(row);
+          td.textContent = value ?? '—';
+          if (col.numeric) td.className = 'num';
+        }
+      }
+      container.appendChild(table);
+    }
+
+    function showError(container, error) {
+      container.textContent = '';
+      const p = document.createElement('p');
+      p.className = 'error';
+      p.textContent = 'Error: ' + error.message;
+      container.appendChild(p);
+    }
+
+    // 1. Listings: FROM property_for_rent SELECT ... ORDER BY rent
+    async function loadListings() {
+      const box = document.getElementById('listings');
+      const { data, error } = await supabase
+        .from('property_for_rent')
+        .select('property_no, street, city, type, rooms, rent')
+        .order('rent');
+
+      if (error) return showError(box, error);
+
+      renderTable(box, data, [
+        { label: 'Property', value: r => r.property_no },
+        { label: 'Street',   value: r => r.street },
+        { label: 'City',     value: r => r.city },
+        { label: 'Type',     value: r => r.type },
+        { label: 'Rooms',    value: r => r.rooms, numeric: true },
+        { label: 'Rent (£)', value: r => r.rent,  numeric: true },
+      ]);
+    }
+
+    // 3. Private data for whoever is logged in.
+    // Notice: no WHERE clause anywhere below. The database adds it for us
+    // through the Row Level Security rules.
+    async function loadMyData() {
+      const welcome = document.getElementById('welcome');
+      const box = document.getElementById('viewings');
+
+      const { data: clients, error: clientError } = await supabase
+        .from('client')
+        .select('client_no, f_name, l_name');
+
+      if (clientError) {
+        welcome.textContent = 'My account';
+      } else if (clients.length === 0) {
+        welcome.textContent = 'Logged in, but not linked to a client record';
+      } else {
+        const c = clients[0];
+        welcome.textContent = `Welcome, ${c.f_name} ${c.l_name} (${c.client_no})`;
+      }
+
+      // A join: each viewing plus the street and city of the property
+      const { data: viewings, error } = await supabase
+        .from('viewing')
+        .select('view_date, comment, property_for_rent ( street, city )')
+        .order('view_date');
+
+      if (error) return showError(box, error);
+
+      renderTable(box, viewings, [
+        { label: 'Date',    value: v => v.view_date },
+        { label: 'Street',  value: v => v.property_for_rent?.street },
+        { label: 'City',    value: v => v.property_for_rent?.city },
+        { label: 'Comment', value: v => v.comment },
+      ]);
+    }
+
+    // Show the right sections for logged-in vs logged-out
+    function showLoggedIn(isLoggedIn) {
+      document.getElementById('login-section').classList.toggle('hidden', isLoggedIn);
+      document.getElementById('private-section').classList.toggle('hidden', !isLoggedIn);
+      if (isLoggedIn) loadMyData();
+    }
+
+    // 2. Log in with email + password (Supabase Auth)
+    document.getElementById('login-form').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const message = document.getElementById('login-message');
+      message.textContent = '';
+      const { error } = await supabase.auth.signInWithPassword({
+        email: document.getElementById('email').value,
+        password: document.getElementById('password').value,
+      });
+      if (error) message.textContent = error.message;
+    });
+
+    document.getElementById('logout').addEventListener('click', async () => {
+      await supabase.auth.signOut();
+    });
+
+    // React to log in / log out. (setTimeout avoids calling Supabase
+    // from inside its own auth callback.)
+    supabase.auth.onAuthStateChange((_event, session) => {
+      setTimeout(() => showLoggedIn(Boolean(session)), 0);
+    });
+
+    loadListings();
+  </script>
+</body>
+</html>
