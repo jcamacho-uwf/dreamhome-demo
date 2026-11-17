@@ -177,19 +177,16 @@
     async function loadListings() {
       const box = document.getElementById('listings');
       const { data, error } = await supabase
-        .from('property_for_rent')
-        .select('property_no, street, city, type, rooms, rent')
-        .order('rent');
+        .from('tv_shows')
+        .select('show_id, title, genre, seasons');
 
       if (error) return showError(box, error);
 
       renderTable(box, data, [
-        { label: 'Property', value: r => r.property_no },
-        { label: 'Street',   value: r => r.street },
-        { label: 'City',     value: r => r.city },
-        { label: 'Type',     value: r => r.type },
-        { label: 'Rooms',    value: r => r.rooms, numeric: true },
-        { label: 'Rent (£)', value: r => r.rent,  numeric: true },
+        { label: 'Show ID', value: r => r.show_id },
+        { label: 'Title',   value: r => r.title },
+        { label: 'Genre',     value: r => r.genre },
+        { label: 'Number of Seasons and My Name Is Josh',     value: r => r.seasons }
       ]);
     }
 
